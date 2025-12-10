@@ -1,0 +1,610 @@
+---
+title: "Final Exam"
+author: "Cailey Baron"
+date: "2025-12-03"
+output: html_document
+---
+
+download packages
+
+``` {r}
+library(tidyverse)
+library(ggplot2)
+library(tidytext)
+library(sotu)
+library(textdata)
+library(patchwork)
+library(maps)
+library(usmap)
+library(ggthemes)
+library(ggrepel)
+library(rpart)
+library(rpart.plot)
+library(emmeans)
+library(ggwordcloud)
+library(countrycode)
+library(dplyr)
+library(sf)
+library(caret)
+library(nnet)
+library(randomForest)
+```
+
+download data
+
+```{r}
+ufo_sightings <- read.csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/refs/heads/main/data/2023/2023-06-20/ufo_sightings.csv")
+
+ufo_places <- read.csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/refs/heads/main/data/2023/2023-06-20/places.csv")
+```
+
+data cleaning (want to keep na's)
+
+```{r}
+ufo_sightings <- ufo_sightings %>%
+  select(!has_images) %>%
+  drop_na(city, state)
+
+ufo_places <- ufo_places %>%
+  select(!alternate_city_names) %>%
+  drop_na(city, state) 
+```
+
+map data
+
+```{r}
+world_data <- read_csv("https://raw.githubusercontent.com/owid/co2-data/master/owid-co2-data.csv")
+world_data <- world_data %>%
+  filter(year >= 2000) %>%
+  drop_na(country, iso_code, year, population, co2_per_capita, gdp)
+
+world_map <- map_data("world") %>%
+   select(! subregion) 
+```
+
+similar responses
+
+```{r}
+common_values <- Reduce(intersect, 
+  list(
+  unique(world_data$country),
+  unique(ufo_places$country),
+  unique(world_map$region)
+))
+
+unique(common_values)
+unique(ufo_sightings$country_code)
+```
+
+more data cleaning 
+
+```{r}
+world_data_clean <- world_data %>%
+  filter(country %in% c("Afghanistan", "Albania", "Algeria", "Angola", "Argentina", "Armenia",
+  "Australia", "Austria", "Azerbaijan", "Bahrain", "Bangladesh", "Barbados",
+  "Belarus", "Belgium", "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil",
+  "Bulgaria", "Cambodia", "Cameroon", "Canada", "Chad", "Chile",
+  "China", "Colombia", "Costa Rica", "Croatia", "Cuba", "Cyprus",
+  "Denmark", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Estonia",
+  "Ethiopia", "Finland", "France", "Germany", "Ghana", "Greece",
+  "Guatemala", "Haiti", "Honduras", "Hungary", "Iceland", "India",
+  "Indonesia", "Iran", "Iraq", "Israel", "Italy", "Jamaica",
+  "Japan", "Jordan", "Kazakhstan", "Kenya", "Kuwait", "Laos",
+  "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Lithuania",
+  "Luxembourg", "Malawi", "Malaysia", "Malta", "Mauritius", "Mexico",
+  "Montenegro", "Morocco", "Nepal", "Netherlands", "New Zealand", "Nigeria",
+  "Norway", "Pakistan", "Panama", "Paraguay", "Peru", "Philippines",
+  "Poland", "Portugal", "Qatar", "Romania", "Russia", "Saudi Arabia",
+  "Senegal", "Serbia", "Singapore", "Slovakia", "Slovenia", "South Africa",
+  "South Korea", "Spain", "Sri Lanka", "Sweden", "Switzerland", "Syria",
+  "Taiwan", "Tanzania", "Thailand", "Tunisia", "Turkey", "Uganda",
+  "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", 
+  "Uzbekistan", "Venezuela", "Vietnam", "Zambia", "Zimbabwe")) 
+
+
+
+world_map_clean <- map_data("world") %>%
+   filter(region %in% c("Afghanistan", "Albania", "Algeria", "Angola", "Argentina", "Armenia",
+  "Australia", "Austria", "Azerbaijan", "Bahrain", "Bangladesh", "Barbados",
+  "Belarus", "Belgium", "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil",
+  "Bulgaria", "Cambodia", "Cameroon", "Canada", "Chad", "Chile",
+  "China", "Colombia", "Costa Rica", "Croatia", "Cuba", "Cyprus",
+  "Denmark", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Estonia",
+  "Ethiopia", "Finland", "France", "Germany", "Ghana", "Greece",
+  "Guatemala", "Haiti", "Honduras", "Hungary", "Iceland", "India",
+  "Indonesia", "Iran", "Iraq", "Israel", "Italy", "Jamaica",
+  "Japan", "Jordan", "Kazakhstan", "Kenya", "Kuwait", "Laos",
+  "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Lithuania",
+  "Luxembourg", "Malawi", "Malaysia", "Malta", "Mauritius", "Mexico",
+  "Montenegro", "Morocco", "Nepal", "Netherlands", "New Zealand", "Nigeria",
+  "Norway", "Pakistan", "Panama", "Paraguay", "Peru", "Philippines",
+  "Poland", "Portugal", "Qatar", "Romania", "Russia", "Saudi Arabia",
+  "Senegal", "Serbia", "Singapore", "Slovakia", "Slovenia", "South Africa",
+  "South Korea", "Spain", "Sri Lanka", "Sweden", "Switzerland", "Syria",
+  "Taiwan", "Tanzania", "Thailand", "Tunisia", "Turkey", "Uganda",
+  "Ukraine", "United Arab Emirates", "UK", "USA", "Uruguay", "Uzbekistan", "Venezuela", "Vietnam",
+  "Zambia", "Zimbabwe")) 
+
+
+
+ufo_places_clean <- ufo_places %>%
+  filter(country %in% c("Afghanistan", "Albania", "Algeria", "Angola", "Argentina", "Armenia",
+  "Australia", "Austria", "Azerbaijan", "Bahrain", "Bangladesh", "Barbados",
+  "Belarus", "Belgium", "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil",
+  "Bulgaria", "Cambodia", "Cameroon", "Canada", "Chad", "Chile",
+  "China", "Colombia", "Costa Rica", "Croatia", "Cuba", "Cyprus",
+  "Denmark", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Estonia",
+  "Ethiopia", "Finland", "France", "Germany", "Ghana", "Greece",
+  "Guatemala", "Haiti", "Honduras", "Hungary", "Iceland", "India",
+  "Indonesia", "Iran", "Iraq", "Israel", "Italy", "Jamaica",
+  "Japan", "Jordan", "Kazakhstan", "Kenya", "Kuwait", "Laos",
+  "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Lithuania",
+  "Luxembourg", "Malawi", "Malaysia", "Malta", "Mauritius", "Mexico",
+  "Montenegro", "Morocco", "Nepal", "Netherlands", "New Zealand", "Nigeria",
+  "Norway", "Pakistan", "Panama", "Paraguay", "Peru", "Philippines",
+  "Poland", "Portugal", "Qatar", "Romania", "Russia", "Saudi Arabia",
+  "Senegal", "Serbia", "Singapore", "Slovakia", "Slovenia", "South Africa",
+  "South Korea", "Spain", "Sri Lanka", "Sweden", "Switzerland", "Syria",
+  "Taiwan", "Tanzania", "Thailand", "Tunisia", "Turkey", "Uganda",
+  "Ukraine", "United Arab Emirates", "United Kingdom", "Uruguay", "USA", "Uzbekistan", 
+  "Venezuela", "Vietnam", "Zambia", "Zimbabwe")) %>%
+  mutate(continent = countrycode(country, "country.name", "continent"))
+
+ufo_sightings_clean <- ufo_sightings %>%
+  filter(country_code %in% c("AF","AL","DZ","AO","AR","AM",
+  "AU","AT","AZ","BH","BD","BB", "BY","BE","BO","BA","BW","BR", 
+  "BG","KH","CM","CA","TD","CL", "CN","CO","CR","HR","CU","CY",
+  "DK","DO","EC","EG","SV","EE", "ET","FI","FR","DE","GH","GR",
+  "GT","HT","HN","HU","IS","IN", "ID","IR","IQ","IL","IT","JM",
+  "JP","JO","KZ","KE","KW","LA", "LV","LB","LS","LR","LY","LT",
+  "LU","MW","MY","MT","MU","MX", "ME","MA","NP","NL","NZ","NG",
+  "NO","PK","PA","PY","PE","PH", "PL","PT","QA","RO","RU","SA",
+  "SN","RS","SG","SK","SI","ZA", "KR","ES","LK","SE","CH","SY",
+  "TW","TZ","TH","TN","TR","UG", "UA","AE","UY","UZ","VE","VN",
+  "ZM","ZW", "GB","US")) %>%
+  mutate(
+    posted_date = as.Date(posted_date),
+    year = as.numeric(format(posted_date, "%Y"))
+  ) %>%
+  filter(year >= 2000)
+
+country_counts <- ufo_places_clean %>%
+  count(country, name = "sighting_count")
+
+world_data_counts <- world_map_clean %>%
+  left_join(country_counts, by = c("region" = "country")) %>%
+  drop_na(sighting_count) %>%
+  mutate(category = case_when(
+      sighting_count <= 100 ~ "Low",
+      sighting_count <= 200 ~ "Medium",
+      sighting_count <= 2000 ~ "High",
+      TRUE ~ "Extreme"))
+
+ufo_sightings_year <- ufo_sightings_clean %>%
+  group_by(year) %>%
+  summarise(total_sightings = n())
+
+ufo_sightings_clean <- ufo_sightings_clean %>%
+  mutate(duration_category = case_when(
+    duration_seconds < 3 ~ "Instant",
+    duration_seconds >= 3 & duration_seconds < 10 ~ "Very Short",
+    duration_seconds >= 10 & duration_seconds < 60 ~ "Short",
+    duration_seconds >= 60 & duration_seconds < 300 ~ "Medium",
+    duration_seconds >= 300 & duration_seconds < 1200 ~ "Long",
+    duration_seconds >= 1200 ~ "Very Long",
+    TRUE ~ NA_character_
+  )) %>%
+  drop_na(day_part)
+```
+
+usa map 
+
+```{r}
+usa_map <- world_map %>%
+  filter(region == "USA")
+
+usa_places <- ufo_places_clean %>%
+  filter(country == "USA")
+  
+usa_sightings <- ufo_sightings_clean %>%
+  filter(country_code == "US")
+
+state_counts <- usa_places %>%
+  count(state, name = "sighting_count") %>%
+  arrange(desc(sighting_count)) 
+  
+state_counts <- state_counts %>%
+  mutate(highlite = case_when(
+    sighting_count == max(sighting_count, na.rm = TRUE) ~ "Max",
+    sighting_count == min(sighting_count, na.rm = TRUE) ~ "Min",
+    TRUE ~ "Other"
+  ))
+
+us_states <- map_data("state") %>%
+  rename(state = region) %>%
+  mutate(state = state.abb[match(tolower(state), tolower(state.name))])
+
+ufo_us <- usmap_transform(usa_places,
+  input_names = c("longitude", "latitude"))
+
+us_states_counts <- us_map(regions = "states") %>%
+  left_join(state_counts,
+    by = c("abbr" = "state")
+  )
+
+state_data_counts <- us_states %>%
+  left_join(us_states_counts, by = c("state" = "abbr"))
+
+state_counts
+
+fill_colors <- c(
+  "Low"     = "lightblue",
+  "Medium"  = "deepskyblue",
+  "High"    = "dodgerblue",
+  "Extreme" = "navy"
+)
+```
+
+more data cleaning
+
+```{r}
+ufo_sightings_clean$duration_category <- factor(
+  ufo_sightings_clean$duration_category,
+  levels = c("Instant", "Very Short", "Short", "Medium", "Long", "Very Long")
+)
+
+duration_counts <- ufo_sightings_clean %>%
+  count(duration_category)
+
+ufo_sightings_year <- ufo_sightings_year %>%
+  mutate(highlite = case_when(
+    total_sightings == max(total_sightings, na.rm = TRUE) ~ "Max",
+    total_sightings == min(total_sightings, na.rm = TRUE) ~ "Min",
+    TRUE ~ "Other"
+  ))
+
+ufo_clean_daytime <- ufo_sightings_clean %>%
+  select(day_part, duration_seconds, country_code, state, city, year, duration_category) %>%
+  mutate(day_part = case_when(
+    day_part == "afternoon" ~ "Afternoon", 
+    day_part == "nautical dusk" ~ "Dusk", 
+    day_part == "astronomical dusk" ~ "Dusk",
+    day_part == "civil dusk" ~ "Dusk",
+    day_part == "morning" ~ "Morning",
+    day_part == "nautical dawn" ~ "Dawn",
+    day_part == "astronomical dawn" ~ "Dawn",
+    day_part == "civil dawn" ~ "Dawn",
+    day_part == "night" ~ "Night")) 
+
+ufo_count_daytime <- ufo_clean_daytime %>%
+  count(day_part, name = "time_day")
+
+ufo_sightings_clean <- ufo_sightings_clean %>%
+  mutate(
+    season = case_when(
+      lubridate::month(posted_date) %in% c(12, 1, 2) ~ "Winter",
+      lubridate::month(posted_date) %in% c(3, 4, 5) ~ "Spring",
+      lubridate::month(posted_date) %in% c(6, 7, 8) ~ "Summer",
+      lubridate::month(posted_date) %in% c(9, 10, 11) ~ "Fall",
+      TRUE ~ NA_character_))
+
+ufo_season_duration <- ufo_sightings_clean %>%
+  count(season, duration_category)
+
+ufo_season_duration$season <- factor(
+  ufo_season_duration$season,
+  levels = c("Winter", "Spring", "Summer", "Fall"))
+
+ufo_season_duration$duration_category <- factor(
+  ufo_season_duration$duration_category,
+  levels = c("Instant", "Very Short", "Short", "Medium", "Long", "Very Long")
+)
+
+duration_colors <- c(
+  "Instant" = "gray90", 
+  "Very Short" = "gray70", 
+  "Short" = "gray50",
+  "Medium" = "gray30",
+  "Long" = "gray20",
+  "Very Long" = "black")
+
+ufo_season_totals <- ufo_season_duration %>%
+  group_by(season) %>%
+  summarise(total = sum(n))
+
+ufo_season_totals$season <- factor(
+  ufo_season_totals$season,
+  levels = c("Winter", "Spring", "Summer", "Fall"))
+
+full_ufo_sightings_clean <- ufo_sightings_clean %>%
+  left_join(ufo_places_clean %>%
+      select(city, state, country_code, latitude, longitude, continent),
+    by = c("city", "state", "country_code")) %>%
+  drop_na()
+
+model_data <- full_ufo_sightings_clean %>%
+  mutate(season = factor(season),
+    duration_category = factor(duration_category),
+    day_part = factor(day_part),
+    continent = factor(continent))
+
+model_data <- model_data %>%
+  select(duration_seconds, year, season, duration_category, day_part,
+         continent, latitude, longitude) %>%
+  drop_na()
+
+nn_grid <- expand.grid(
+  decay = c(0.01, 0.1, 1, 10, 100),
+  size  = 3)
+```
+
+maps 
+
+```{r}
+global_sightings <- ggplot(world_map, aes(x = long, y = lat, group = group)) +
+  geom_polygon(color = "black", linewidth = 0.2, fill = "gray80") +
+  coord_quickmap() +
+  geom_point(data = ufo_places_clean, aes(x = longitude, y = latitude, color = continent), 
+             inherit.aes = FALSE, size = 0.7) +
+  annotate("text", x = -150, y = 0, label = "Most sightings in\n North America",
+         color = "black", fontface = "bold", size = 3) +
+   labs(
+    title = "UFO Sightings Globally",
+    x = "Longitude", 
+    y = "Latitude"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+us_sightings <- plot_usmap(fill = "gray80", color = "black") +
+  geom_polygon(data = usa_places, aes(x = longitude, y = latitude)) +
+  geom_sf(data = ufo_us, aes(color = state),
+    size = 0.6, alpha = 0.9, inherit.aes = FALSE) +
+  labs(title = "U.S. UFO Sightings",
+       subtitle = "839 sightings in CA, 1 sighting in DC",
+         x = "Longitude", y = "Latitude", color = "State") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+
+plots
+
+```{r}
+ufo_over_time <- ggplot(ufo_sightings_year, aes(x = year, y = total_sightings)) +
+  geom_line(color = "deepskyblue4", linewidth = 1.2) +
+  geom_point(color = "navy", size = 3) +
+  annotate("label", x = 2020, y = 1000, label = "948 sightings", color = "navy", fontface = "bold", size = 3) +
+  annotate("label", x = 2017, y = 7250, label = "7249 sightings", color = "navy", fontface = "bold", size = 3) +
+  scale_x_continuous(breaks = seq(min(ufo_sightings_year$year), max(ufo_sightings_year$year), 2)) +
+  labs(title = "UFO Sightings Over Time",
+    subtitle = "Worldwide totals reported (2000–2023)",
+    x = "Year", y = "Total Sightings") +
+  theme_minimal()
+
+sighting_duration <- ggplot(duration_counts, aes(x = duration_category, y = n)) +
+  geom_col(fill = "deepskyblue4") +
+  geom_text(aes(label = n),
+    color = "black",
+    fontface = "bold",
+    vjust = 2) +
+  labs(title = "Distribution of UFO Sightings by Duration",
+    x = "Duration",
+    y = "Number of Sightings") +
+  theme_minimal()
+
+ufo_count_daytime$day_part <- factor(ufo_count_daytime$day_part,
+                             levels = c("Dawn", "Morning", "Afternoon", "Dusk", "Night")) 
+
+count_colors <- c("orange", "skyblue", "yellow", "red", "purple")
+
+
+time_of_day <- ggplot(ufo_count_daytime, aes(x = day_part, y = time_day)) +
+  geom_col(fill = count_colors) + 
+  labs(title = "Global UFO Sightings By Time Of Day", 
+       subtitle = "Data from 2000 to 2023",
+       x = "Time of Day", y = "Number of Sightings") +
+  annotate(geom = "label", x = "Night", y = 40000, label = "46,375", color = "purple", fontface = "bold", size = 4) +
+  annotate(geom = "label", x = "Dusk", y = 15000, label = "20,769", color = "gold2", fontface = "bold", size = 4) +
+  annotate(geom = "label", x = "Afternoon", y = 7000, label = "12,105", color = "orange", fontface = "bold", size = 4) +
+  annotate(geom = "label", x = "Morning", y = 4000, label = "7,263", color = "red", fontface = "bold", size = 3.5) +
+  annotate(geom = "label", x = "Dawn", y = 1550, label = "3,558", color = "skyblue", fontface = "bold", size = 3.5) +
+  theme_minimal() 
+
+sightings_season <- ggplot(ufo_season_duration, aes(x = season, y = n, fill = duration_category)) +
+  geom_col(position = "dodge") +
+  scale_y_continuous(limits = c(0, 8000)) +  
+  annotate(geom = "label", x = "Winter", y = 1000, label = "22,824", color = "gray30", fontface = "bold", size = 4) +
+  annotate(geom = "label", x = "Spring", y = 1000, label = "19,893", color = "gray30", fontface = "bold", size = 4) +
+  annotate(geom = "label", x = "Summer", y = 1000, label = "25,463", color = "gray30", fontface = "bold", size = 4) +
+  annotate(geom = "label", x = "Fall", y = 1000, label = "21,890", color = "gray30", fontface = "bold", size = 4) +
+  scale_fill_manual(values = duration_colors, drop = FALSE) + 
+  labs(title = "UFO Sightings by Season and Duration",
+    x = "Season", y = "Total Sightings",
+    fill = "Duration") +
+  theme_minimal(base_size = 13) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+dashboard 
+
+```{r}
+top_row <- global_sightings | us_sightings | ufo_over_time
+bottom_row <- sightings_season | sighting_duration | time_of_day
+
+ufo_dashboard <- (top_row / bottom_row) +
+  plot_layout(widths = c(1, 1, 2)) +
+  plot_annotation(title = "Global UFO Sightings Dashboard",
+    subtitle = "Patterns over time, space, season, duration, and time of day",
+    theme = theme(plot.title = element_text(face = "bold", size = 18),
+      plot.subtitle = element_text(size = 12)))
+
+ufo_dashboard
+
+ggsave(filename = "/Users/caileybaron/Desktop/ufo_dashboard.png",
+  plot = ufo_dashboard,
+  width = 14,
+  height = 8,
+  dpi = 300)
+```
+
+Can we predict how long a UFO sighting lasts, based on when and where it happens?
+
+models 
+
+```{r}
+set.seed(123)
+
+ufo_sightings_sample <- model_data %>% sample_n(2500)
+
+ctrl <- trainControl(method = "cv", number = 5)
+
+set.seed(123)
+
+lm_full_model <- train(duration_seconds ~ year + season + day_part + latitude + longitude, 
+                       data = ufo_sightings_sample, method = "lm", trControl = ctrl)
+
+set.seed(123)
+
+lm_subset <- train(duration_seconds ~ year + day_part + season,
+                   data = ufo_sightings_sample, method = "lm", trControl = ctrl)
+
+set.seed(123)
+
+tree_model <- train(duration_seconds ~ year + season + day_part + latitude + longitude,
+                    data = ufo_sightings_sample, method = "rpart", trControl = ctrl)
+
+set.seed(123)
+
+rf_model200 <- train(duration_seconds ~ year + season + day_part + latitude + longitude, 
+                  data = ufo_sightings_sample, method = "rf", trControl = ctrl, ntree = 200, tuneLength = 5)
+
+set.seed(123)
+
+rf_model400 <- train(duration_seconds ~ year + season + day_part + latitude + longitude, 
+                  data = ufo_sightings_sample, method = "rf", trControl = ctrl, ntree = 400, tuneLength = 5)
+
+model_compare <- resamples(list(
+  LM_full = lm_full_model,
+  LM_sub = lm_subset,
+  Tree = tree_model,
+  RF2 = rf_model200,
+  RF4 = rf_model400))
+
+summary(model_compare)
+```
+
+justification 
+
+Linear Regression (All Predictors)
+Baseline model to assess whether UFO sighting duration can be explained as a combination of geographic and numerical variables. It offers high interpretability and allows comparison of predictor influences.
+
+Linear Regression (Subset)
+Tests whether a simpler specification can achieve similar accuracy and improve the model. This also fulfills the requirement of training a model that does not use all predictors.
+
+Regression Tree (rpart)
+A tree-based model allows nonlinear relationships and interaction effects across predictors. This model is included to satisfy the requirement for a tree-based method and provides visual interpretability into how different variables split duration outcomes.
+
+Random Forest (200 & 400 Trees)
+Random forest generally improves prediction accuracy and stability over a single tree. By testing two forest sizes (200 and 400 trees), I evaluated how increasing the number of trees influences model performance. Random forests capture complex variable interactions, making them strong options for the final model.
+
+
+comparison data cleaning
+
+```{r}
+prediction_df <- data.frame(
+  Actual_Duration = model_data$duration_seconds,
+  LM_Full_Pred    = predict(lm_full_model, newdata = model_data),
+  LM_Sub_Pred     = predict(lm_subset, newdata = model_data),
+  Tree_Pred       = predict(tree_model, newdata = model_data),
+  RF200_Pred      = predict(rf_model200, newdata = model_data),
+  RF400_Pred      = predict(rf_model400, newdata = model_data))
+
+compare_df <- prediction_df %>%
+  pivot_longer(cols = c(LM_Full_Pred, LM_Sub_Pred, Tree_Pred, RF200_Pred, RF400_Pred),
+    names_to = "Model", values_to = "Predicted_Duration")
+
+stats <- summary(model_compare)$statistics
+
+rmse_df <- as.data.frame(stats$RMSE)
+rmse_df$Model <- rownames(rmse_df)
+rmse_df <- rmse_df %>%
+  select(Model, Mean) %>% 
+  mutate(Metric = "RMSE")
+
+mae_df <- as.data.frame(stats$MAE)
+mae_df$Model <- rownames(mae_df)
+mae_df <- mae_df %>%
+  select(Model, Mean) %>%
+  mutate(Metric = "MAE")
+
+r2_df <- as.data.frame(stats$Rsquared)
+r2_df$Model <- rownames(r2_df)
+r2_df <- r2_df %>%
+  select(Model, Mean) %>%
+  mutate(Metric = "R²")
+
+all_stats <- bind_rows(rmse_df, mae_df, r2_df) %>%
+  rename(Score = Mean)
+```
+
+comparison plots
+
+```{r}
+predicted_durations <- ggplot(compare_df, aes(x = Actual_Duration, y = Predicted_Duration, color = Model)) +
+  geom_point(alpha = 0.45) +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = "dashed") +
+  facet_wrap(~ Model, scales = "free") +
+  labs(
+    title = "Predicted vs. Actual UFO Duration",
+    x = "Actual Duration (seconds)",
+    y = "Predicted Duration (seconds)",
+    color = "Model"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"), 
+        legend.position = "none")
+
+cv_comparison <- ggplot(all_stats, aes(x = reorder(Model, Score), y = Score, color = Model)) +
+  geom_point(size = 3) +
+  coord_flip() +
+  facet_wrap(~ Metric, scales = "free_x") +
+  labs(title = "Cross-Validated Performance Comparison Across Models",
+    subtitle = "RMSE, MAE, and R2 for 5-fold CV",
+    x = "Predictive Model",
+    y = "Mean Performance") +
+  theme_minimal(base_size = 13) +
+  theme(plot.title = element_text(face = "bold"), 
+        legend.position = "none", 
+        axis.text.x = element_text(angle = 45, hjust = 1), 
+        panel.spacing = unit(1.2, "lines"))
+
+analysis_dashboard <- predicted_durations / cv_comparison +
+  plot_layout(heights = c(4, 4)) +
+  plot_annotation(title = "UFO Prediction Analysis Dashboard",
+    subtitle = "Predictive analysis finds that RF4 is the Best Model",
+    theme = theme(plot.title = element_text(face = "bold", size = 18),
+      plot.subtitle = element_text(size = 12)))
+
+analysis_dashboard
+
+ggsave(filename = "/Users/caileybaron/Desktop/analysis_dashboard.png",
+  plot = analysis_dashboard, width = 14, height = 8, dpi = 300)
+```
+
+explanation
+
+Across all five predictive models, the Random Forest model with 400 trees (RF4) performed the best overall. It produced the highest R2, capturing more variation in UFO sighting duration than other approaches while also maintaining competitive RMSE and MAE values. This suggests that relationships between the predictors and duration are nonlinear, and that multiple decision trees helps detect the subtle patterns that linear regression or a single decision tree wouldn't be able to.
+
+Even the best model still explains a very small portion of the variance in duration_seconds. The low R2 across all models indicates that spatial and temporal variables alone are not strong predictors of how long a UFO sighting lasts. The duration of a report likely reflects human memory instead of structured geographic 
+or temporal patterns.
+
+The analysis shows that predicting how long a UFO sighting lasts is highly uncertain using only the available spatial and temporal information. Still, the Random Forest model demonstrates that there are faint patterns that can be detected at scale, suggesting that some environmental or situational conditions influence sighting duration.
+
+Future work that incorporates features like the sighting’s visual description, movement, or even sentiment within the report may lead to more meaningful model performance. These predictions should be used as pattern detection tools instead of precise data.
+
+
+
+
+
+
